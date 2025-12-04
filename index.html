@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TopUp-Torture — paste timestamps, let the app think</title>
+  <style>
+    :root{
+      --bg:#0b0b0d;
+      --card:#0f1113;
+      --muted:#9aa0a6;
+      --mono:#c9d1d9;
+      --accent:#00e6c3; /* electric teal */
+      --danger:#ff6b6b;
+      --glass: rgba(255,255,255,0.03);
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#050506 0%,var(--bg) 100%);color:#e6eef3}
+    .wrap{max-width:980px;margin:28px auto;padding:20px}
+    header{display:flex;align-items:center;gap:16px}
+    h1{font-weight:700;margin:0;font-size:20px}
+    .hero{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
+          color:var(--mono); font-size:13px}
+    .topbar{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+    textarea{width:100%;height:220px;background:var(--card);border:1px solid rgba(255,255,255,0.04);
+             color:var(--mono);padding:14px;border-radius:8px;font-family: ui-monospace,monospace;resize:vertical}
+    .controls{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+    button{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--mono);padding:8px 12px;border-radius:8px;
+           cursor:pointer;transition:all .12s; font-weight:600}
+    button.primary{background:linear-gradient(90deg, rgba(0,230,195,0.09), rgba(128,0,255,0.04));border-color:var(--accent);color:var(--accent)}
+    button.small{padding:6px 8px;font-size:13px}
+    .samples{display:flex;gap:8px}
+    main{margin-top:18px}
+    .summary{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:8px;background:var(--card);box-shadow:0 4px 12px rgba(0,0,0,0.5)}
+    .summary .left{font-weight:700}
+    .cards{margin-top:12px;display:flex;flex-direction:column;gap:10px}
+    .card{background:var(--card);padding:12px;border-radius:10px;display:flex;flex-direction:column;gap:8px;box-shadow:0 6px 18px rgba(0,0,0,0.6)}
+    .card-row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    .meta{font-size:13px;color:var(--muted)}
+    .mono {font-family: ui-monospace,monospace; color:var(--mono); font-size:13px; background:var(--glass); padding:6px;border-radius:6px}
+    .label{padding:6px 8px;border-radius:8px;font-weight:700}
+    .green{background:rgba(0,200,140,0.12);color:var(--accent);border:1px solid rgba(0,200,140,0.08)}
+    .neutral{background:rgba(255,255,255,0.02);color:var(--muted)}
+    .error{background:rgba(255,80,80,0.08);color:var(--danger);border:1px solid rgba(255,80,80,0.06)}
+    .actions{display:flex;gap:8px;align-items:center}
+    .small-muted{font-size:12px;color:var(--muted)}
+    footer{margin-top:18px;text-align:center;color:var(--muted);font-size:12px}
+    .apply-on{background:linear-gradient(90deg,rgba(0,230,195,0.12),rgba(128,0,255,0.06));color:var(--accent);border:1px solid rgba(0,230,195,0.12)}
+    .copy-btn{background:transparent;border:1px dashed rgba(255,255,255,0.05);padding:6px 8px;border-radius:6px}
+    .export-area{margin-top:8px;display:flex;gap:8px;align-items:center}
+    @media(min-width:880px){.cards{flex-direction:row;flex-wrap:wrap}.card{width:calc(50% - 8px)}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>TopUp-Torture</h1>
+        <div class="hero">No brain needed — just your week timestamps. Let the app think; you just paste.</div>
+      </div>
+    </header>
+
+    <main>
+      <div style="margin-top:12px">
+        <textarea id="inputArea" placeholder="Paste one week's timestamps here (supports Sample data formats)."></textarea>
+
+        <div class="controls">
+          <div class="samples">
+            <button id="sample1" class="small">Sample Data 1 (with TopUps)</button>
+            <button id="sample2" class="small">Sample Data 2 (ongoing week)</button>
+          </div>
+          <div style="flex:1"></div>
+          <button id="pasteCompute" class="primary">Paste & Compute — lemme do the math</button>
+          <button id="clearBtn" class="small">Clear</button>
+        </div>
+      </div>
+
+      <section style="margin-top:12px">
+        <div class="summary" id="weeklySummary" style="display:none">
+          <div class="left">
+            <div style="font-size:15px">Weekly summary</div>
+            <div class="small-muted" id="summaryDetails">Total Top-up this week: 0h 0m • Days needing top-up: 0</div>
+          </div>
+          <div class="right actions">
+            <button id="exportBtn" class="small">Copy compact list</button>
+            <button id="resetApplied" class="small">Reset Applied</button>
+          </div>
+        </div>
+
+        <div class="cards" id="cardsContainer"></div>
+      </section>
+
+      <div class="export-area" id="exportArea" style="display:none">
+        <div class="small-muted">Export copied to clipboard.</div>
+      </div>
+
+      <footer>
+        <div>TopUp-Torture — we do the math so your brain can chill.</div>
+      </footer>
+    </main>
+  </div>
+
+  <script>
+  /************************************************************************
+   * TopUp-Torture parsing and UI script
+   * - Implements the spec provided in the project brief.
+   * - Supports varied time formats, multi-sessions, cross-midnight logic,
+   *   placeholder/missing lines, ignores pre-applied topups when computing,
+   *   and marks errors for malformed/overlapping sessions.
+   *
+   * Key design decisions:
+   * - All minute arithmetic uses integers (minutes since day start).
+   * - If logout < login, assume logout is next day (add 24*60).
+   * - Overlaps / negative durations produce an error for that day.
+   * - Missing login or logout yields "Data porting / missing".
+   ************************************************************************/
+
+  // --- Utilities ---
+  const REQUIRED_MIN = 10*60; // 10 hours = 600 minutes
+  const WEEKDAY_RE = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*\d{1,2}\s+\w+/i;
+
+  function normalizeText(s){
+    return s.replace(/\r\n/g,'\n').replace(/\t/g,' ').replace(/[ ]{2,}/g,' ').trim();
+  }
+
+  // Parse a time token like "09:59 AM", "8:05 PM", "20:30", "8.05 pm", "11:00-21:00" (range)
+  // Returns minutes since day start (0..1439) and a flag if it's a range (pair returned).
+  function parseTimeToken(tok){
+    // sanitize
+    tok = tok.replace(/\./g,':').replace(/\s+/g,' ').trim();
+    // range like 11:00-21:00
+    const rangeMatch = tok.match(/^(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})$/);
+    if(rangeMatch){
+      return [parseHHMM(rangeMatch[1]), parseHHMM(rangeMatch[2])];
+    }
+    // with AM/PM
+    const ampm = tok.match(/(am|pm)$/i);
+    if(ampm){
+      const t = tok.replace(/(am|pm)$/i,'').trim();
+      return parseHHMM_AMPM(t,ampm[1].toLowerCase());
+    }
+    // maybe ends with AM/PM with space
+    const match2 = tok.match(/(\d{1,2}:\d{2})\s*([AaPp][Mm])$/);
+    if(match2){
+      return parseHHMM_AMPM(match2[1], match2[2].toLowerCase());
+    }
+    // plain 24h
+    if(/^\d{1,2}:\d{2}$/.test(tok)) return parseHHMM(tok);
+    // numeric without colon? reject
+    return null;
+  }
+
+  function parseHHMM(s){
+    const [h,m] = s.split(':').map(x=>parseInt(x,10));
+    if(Number.isNaN(h) || Number.isNaN(m) || h<0 || h>23 || m<0 || m>59) return null;
+    return toMinutes(h,m);
+  }
+  function parseHHMM_AMPM(s, ampm){
+    const [hStr,mStr] = s.split(':');
+    if(!mStr) return null;
+    let h = parseInt(hStr,10), m = parseInt(mStr,10);
+    if(Number.isNaN(h) || Number.isNaN(m)) return null;
+    if(h === 12) h = 0;
+    if(ampm === 'pm') h += 12;
+    return toMinutes(h,m);
+  }
+  function toMinutes(h,m){ return h*60 + m; }
+  function minutesToHM(mins){
+    const h = Math.floor(mins/60), m = mins%60;
+    return {h,m};
+  }
+  function format12(mins){
+    // mins may be >= 24*60 (next day), compute day offset
+    let dayOffset = Math.floor(mins / (24*60));
+    let m = mins % (24*60);
+    if(m < 0){ m += 24*60; dayOffset -= 1; }
+    const hh = Math.floor(m/60);
+    const mm = m%60;
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    let hh12 = hh % 12; if(hh12 === 0) hh12 = 12;
+    const pad = n => n.toString().padStart(2,'0');
+    const suffix = dayOffset === 0 ? '' : ' (next day)';
+    return { str: `${pad(hh12)}:${pad(mm)} ${ampm}`, nextLabel: dayOffset===0 ? '' : ' (next day)' };
+  }
+
+  // extract time-like tokens from a block in original order
+  function extractTimeTokens(blockLines){
+    const tokens = [];
+    const tokenRegex = /(\d{1,2}[:.]\d{2}\s*(?:[AaPp][Mm])?)|(\d{1,2}[:.]\d{2}\s*[-–]\s*\d{1,2}[:.]\d{2})/g;
+    for(const line of blockLines){
+      let match;
+      while((match = tokenRegex.exec(line)) !== null){
+        tokens.push(match[0].trim());
+      }
+    }
+    return tokens;
+  }
+
+  // Check overlaps: sessions = [{in:min,out:min},...], all mins absolute (may exceed 1440 for next day)
+  function sessionsOverlap(sessions){
+    // sort by start
+    const arr = sessions.slice().sort((a,b)=>a.in - b.in);
+    for(let i=1;i<arr.length;i++){
+      if(arr[i].in < arr[i-1].out) return true;
+    }
+    return false;
+  }
+
+  // --- Parsing pipeline ---
+  function splitDayBlocks(text){
+    text = normalizeText(text);
+    const lines = text.split('\n');
+    const blocks = [];
+    let cur = null;
+    for(let i=0;i<lines.length;i++){
+      const line = lines[i].trim();
+      if(WEEKDAY_RE.test(line)){
+        // start new block
+        if(cur) blocks.push(cur);
+        cur = {header: line, lines: [line]};
+      } else {
+        if(!cur){
+          // If no header encountered yet, try to group until blank line
+          cur = {header: 'Unknown', lines: []};
+        }
+        cur.lines.push(line);
+      }
+    }
+    if(cur) blocks.push(cur);
+    return blocks;
+  }
+
+  function parseDayBlock(block){
+    // returns object:
+    // { dayLabel, plannedShift, timestamps (array), workedMinutes, deficitMinutes, topupStart, topupEnd, status, message }
+    const lines = block.lines;
+    const dayLabel = block.header;
+    const out = { dayLabel, plannedShift: null, timestamps: [], workedMinutes: null, deficitMinutes: null,
+                  topupStart: null, topupEnd: null, status: 'ok', message: '', rawLines: lines, applied:false };
+    // find planned shift
+    for(const l of lines){
+      const pm = l.match(/Planned Shift\s*[:\-]\s*(\d{1,2}[:.]\d{2}\s*[-–]\s*\d{1,2}[:.]\d{2})/i);
+      if(pm) { out.plannedShift = pm[1].replace(/\./g,':').trim(); break; }
+    }
+    // find explicit worked duration line like "10h 09m" or "-- h -- m"
+    for(const l of lines){
+      const w = l.match(/(\d{1,2})h\s*(\d{1,2})m/i);
+      if(w){ out.workedMinutes = parseInt(w[1],10)*60 + parseInt(w[2],10); break; }
+      const miss = l.match(/--\s*h\s*--\s*m/i);
+      if(miss){ out.status='missing'; out.message='Data porting / missing'; return out; }
+    }
+    // gather timestamps in order (ignoring UI lines like 'Click here to Apply TopUp' or 'Total TopUp Hrs')
+    const timeTokens = extractTimeTokens(lines);
+    // However: some inputs include "Total TopUp Hrs 00h 13m" which our workedMinutes parsing handles above.
+    // We only use login/logout pairs for computing if workedMinutes wasn't present or to cross-check.
+    // We'll parse timestamps into session pairs (in,out)
+    const parsedTimes = [];
+    for(const tok of timeTokens){
+      const parsed = parseTimeToken(tok);
+      if(parsed === null) continue;
+      if(Array.isArray(parsed) && parsed.length===2){
+        parsedTimes.push(parsed[0]);
+        parsedTimes.push(parsed[1]);
+      } else {
+        parsedTimes.push(parsed);
+      }
+    }
+    out.timestamps = parsedTimes;
+    // If we already had workedMinutes from explicit "10h 09m" line, use that to compute deficits
+    if(typeof out.workedMinutes === 'number'){
+      // still need to compute topup window if deficit > 0 using last logout time from timestamps if available
+    } else {
+      // compute workedMinutes from timestamps
+      if(parsedTimes.length === 0){
+        out.status = 'missing';
+        out.message = 'Missing timestamps / Data porting in progress';
+        return out;
+      }
+      // need pairs: treat consecutive tokens as login/logout pairs; odd leftover -> missing logout
+      if(parsedTimes.length % 2 !== 0){
+        out.status = 'missing';
+        out.message = 'Missing logout for last session';
+        // but we still can try to compute based on complete pairs only? Spec says if login/logout missing mark as Data porting / missing and do not attempt compute.
+        return out;
+      }
+      // build sessions
+      const sessions = [];
+      for(let i=0;i<parsedTimes.length;i+=2){
+        let tin = parsedTimes[i], tout = parsedTimes[i+1];
+        if(tin === null || tout === null){ out.status='error'; out.message='Unable to parse time token'; return out; }
+        // If tout < tin -> next day
+        if(tout < tin) tout += 24*60;
+        const dur = tout - tin;
+        if(dur < 0){ out.status='error'; out.message='Negative session duration'; return out; }
+        sessions.push({in:tin, out:tout});
+      }
+      // check overlaps
+      if(sessionsOverlap(sessions)){
+        out.status='error';
+        out.message='Overlapping sessions detected';
+        return out;
+      }
+      // sum durations
+      const total = sessions.reduce((s,ss)=>s + (ss.out - ss.in),0);
+      out.workedMinutes = total;
+    }
+
+    // Now, if workedMinutes computed, compute deficit
+    if(out.workedMinutes >= REQUIRED_MIN){
+      out.deficitMinutes = 0;
+      out.status = 'ok';
+      out.message = 'No top-up required — skipped';
+    } else {
+      out.deficitMinutes = REQUIRED_MIN - out.workedMinutes;
+      // we need last logout to compute topup_start
+      // find last logout in tokens order
+      // tokens may be absent if workedMinutes was explicit; still try to find last logout
+      let lastLogout = null;
+      // prefer scanning lines bottom-up for the last time pattern (login/logout appear in order)
+      for(let i=lines.length-1;i>=0;i--){
+        const tline = lines[i];
+        const tr = extractTimeTokens([tline]);
+        if(tr.length>0){
+          // take last token on that line
+          const p = parseTimeToken(tr[tr.length-1]);
+          if(p === null) continue;
+          if(Array.isArray(p)) lastLogout = p[1];
+          else lastLogout = p;
+          break;
+        }
+      }
+      if(lastLogout === null){
+        // fallback: if timestamps array exists, use last from parsedTimes
+        if(out.timestamps.length>0) lastLogout = out.timestamps[out.timestamps.length-1];
+      }
+      if(lastLogout === null){
+        out.status='missing';
+        out.message='Missing logout to compute top-up start';
+        return out;
+      }
+      // topup_start = last_logout + 1 minute
+      let topupStart = lastLogout + 1;
+      let topupEnd = topupStart + out.deficitMinutes;
+      out.topupStart = topupStart;
+      out.topupEnd = topupEnd;
+      out.status = 'needs_topup';
+      out.message = 'Top-up required';
+    }
+
+    return out;
+  }
+
+  // Main compute function
+  function computeFromText(text){
+    const blocks = splitDayBlocks(text);
+    const days = blocks.map(parseDayBlock);
+    // weekly aggregate
+    let weeklyTotal = 0, needing = 0;
+    for(const d of days){
+      if(d.deficitMinutes) { weeklyTotal += d.deficitMinutes; if(d.deficitMinutes>0) needing++; }
+    }
+    return {days, weeklyTotal, needing};
+  }
+
+  // --- Rendering ---
+  const cardsContainer = document.getElementById('cardsContainer');
+  const summaryDiv = document.getElementById('weeklySummary');
+  const summaryDetails = document.getElementById('summaryDetails');
+  const exportBtn = document.getElementById('exportBtn');
+  const exportArea = document.getElementById('exportArea');
+  const resetApplied = document.getElementById('resetApplied');
+
+  function renderResults(res){
+    cardsContainer.innerHTML = '';
+    if(!res || !res.days || res.days.length===0){
+      summaryDiv.style.display='none';
+      return;
+    }
+    summaryDiv.style.display='flex';
+    summaryDetails.textContent = `Total Top-up this week: ${formatHM(res.weeklyTotal)} • Days needing top-up: ${res.needing}`;
+
+    for(const day of res.days){
+      const card = document.createElement('div'); card.className='card';
+      const top = document.createElement('div'); top.className='card-row';
+      const left = document.createElement('div');
+      const title = document.createElement('div'); title.innerHTML = `<strong>${escapeHtml(day.dayLabel)}</strong>`;
+      const planned = document.createElement('div'); planned.className='meta'; planned.textContent = day.plannedShift ? `Planned: ${day.plannedShift}` : '';
+      left.appendChild(title); left.appendChild(planned);
+
+      const right = document.createElement('div'); right.className='actions';
+
+      // status
+      const statusDiv = document.createElement('div');
+      if(day.status === 'ok' && day.deficitMinutes === 0){
+        statusDiv.className='label green';
+        statusDiv.textContent = 'No top-up required — skipped';
+      } else if(day.status === 'needs_topup'){
+        statusDiv.className='label neutral';
+        statusDiv.textContent = `Top-up: ${format12(day.topupStart).str} → ${format12(day.topupEnd).str}`;
+      } else if(day.status === 'missing'){
+        statusDiv.className='label error';
+        statusDiv.textContent = day.message || 'Data porting / missing';
+      } else if(day.status === 'error'){
+        statusDiv.className='label error';
+        statusDiv.textContent = day.message || 'Unable to parse — check format';
+      } else {
+        statusDiv.className='label neutral';
+        statusDiv.textContent = day.message || '—';
+      }
+      right.appendChild(statusDiv);
+
+      // Copy button for topup window
+      if(day.status==='needs_topup'){
+        const copyBtn = document.createElement('button'); copyBtn.className='copy-btn small';
+        copyBtn.textContent = 'Copy window';
+        copyBtn.onclick = async ()=>{
+          const txt = `${format12(day.topupStart).str} → ${format12(day.topupEnd).str}`;
+          try{
+            await navigator.clipboard.writeText(txt);
+            showTemp(exportArea, 'Copied top-up window to clipboard.');
+          }catch(e){
+            alert('Copy failed: '+e);
+          }
+        };
+        right.appendChild(copyBtn);
+
+        // Apply toggle
+        const applyBtn = document.createElement('button'); applyBtn.className='small';
+        applyBtn.textContent = 'Apply TopUp';
+        applyBtn.onclick = ()=>{
+          day.applied = !day.applied;
+          applyBtn.classList.toggle('apply-on', day.applied);
+          applyBtn.textContent = day.applied ? 'Applied' : 'Apply TopUp';
+          // Update weekly summary (applied should not change deficits per spec but we simulate applied state)
+          // For demo, we show applied count in small note.
+          renderAppliedNote();
+        };
+        right.appendChild(applyBtn);
+      }
+
+      // show parsed timestamps and worked duration
+      const bottom = document.createElement('div'); bottom.className='card-row';
+      const tsDiv = document.createElement('div'); tsDiv.className='mono';
+      if(day.timestamps && day.timestamps.length>0){
+        const tokens = day.timestamps.map(t=>format12(t).str);
+        tsDiv.textContent = tokens.join('  ·  ');
+      } else tsDiv.textContent = '(no parsed timestamps)';
+      const workedDiv = document.createElement('div'); workedDiv.className='meta';
+      workedDiv.textContent = `Worked: ${typeof day.workedMinutes === 'number' ? formatHM(day.workedMinutes) : '—'}`;
+      bottom.appendChild(tsDiv); bottom.appendChild(workedDiv);
+
+      card.appendChild(left);
+      card.appendChild(right);
+      card.appendChild(bottom);
+
+      // message row when needed
+      if(day.status === 'needs_topup'){
+        const infoRow = document.createElement('div'); infoRow.className='card-row';
+        const topup
