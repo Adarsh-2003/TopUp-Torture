@@ -291,7 +291,7 @@ function processDay(dayData) {
         topupStart = lastLogout + 1;
         // Keep values >= 1440 to indicate next day (formatTime12Hour will handle it)
         
-        topupEnd = topupStart + deficit;
+        topupEnd = topupStart + deficit + 1;
         // Keep values >= 1440 to indicate next day (formatTime12Hour will handle it)
         
         status = 'needs-topup';
